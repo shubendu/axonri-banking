@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Axonri — Banking Compliance</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;color:#0F172A;min-height:100vh;}
+  header{background:#0F2040;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;}
+  header h1{font-size:18px;font-weight:600;letter-spacing:-.3px;}
+  header span{font-size:13px;opacity:.7;}
+  #logout{background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;}
+  main{max-width:860px;margin:40px auto;padding:0 20px;}
+  .card{background:#fff;border-radius:12px;border:1px solid #E2E8F0;padding:28px;margin-bottom:20px;}
+  textarea{width:100%;min-height:80px;border:1.5px solid #CBD5E1;border-radius:8px;padding:12px;font-size:15px;font-family:inherit;resize:vertical;outline:none;transition:border .2s;}
+  textarea:focus{border-color:#1D4ED8;}
+  .controls{display:flex;gap:10px;margin-top:12px;align-items:center;}
+  #mic-btn{width:44px;height:44px;border-radius:50%;border:none;background:#F1F5F9;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:background .2s;}
+  #mic-btn.recording{background:#FEE2E2;}
+  #mic-btn:disabled{opacity:.4;cursor:not-allowed;}
+  #submit-btn{flex:1;height:44px;background:#1D4ED8;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer;transition:background .2s;}
+  #submit-btn:hover{background:#1e40af;}
+  #submit-btn:disabled{background:#94A3B8;cursor:not-allowed;}
+  .answer-section{display:none;}
+  .answer-section.visible{display:block;}
+  #spinner{display:flex;align-items:center;gap:10px;color:#6B7280;font-size:14px;padding:16px 0;}
+  .dot{width:6px;height:6px;border-radius:50%;background:#1D4ED8;animation:bounce .8s ease-in-out infinite;}
+  .dot:nth-child(2){animation-delay:.15s;}
+  .dot:nth-child(3){animation-delay:.3s;}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-8px)}}
+  #answer-text{font-size:15px;line-height:1.75;color:#0F172A;white-space:pre-wrap;min-height:40px;}
+  .sources{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;}
+  .source-pill{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:500;}
+  .error-msg{color:#DC2626;background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px;font-size:14px;}
+  .history{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+  .history-chip{background:#F1F5F9;border:1px solid #E2E8F0;border-radius:99px;padding:5px 12px;font-size:12px;cursor:pointer;color:#475569;}
+  .history-chip:hover{background:#E2E8F0;}
+  .stt-status{font-size:12px;color:#6B7280;margin-left:auto;}
+
+  /* Login */
+  #login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F8FAFC;}
+  .login-card{background:#fff;border-radius:16px;border:1px solid #E2E8F0;padding:48px 40px;width:100%;max-width:380px;text-align:center;}
+  .login-card h2{font-size:28px;font-weight:700;color:#0F2040;margin-bottom:4px;}
+  .login-card p{color:#6B7280;font-size:14px;margin-bottom:32px;}
+  .login-card input{width:100%;border:1.5px solid #CBD5E1;border-radius:8px;padding:12px;font-size:15px;margin-bottom:12px;outline:none;}
+  .login-card input:focus{border-color:#1D4ED8;}
+  .login-card button{width:100%;height:44px;background:#0F2040;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer;}
+  .login-error{color:#DC2626;font-size:13px;margin-top:8px;}
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div id="login-screen">
+  <div class="login-card">
+    <h2>Axonri</h2>
+    <p>Banking Compliance Assistant</p>
+    <input type="text" id="login-user" placeholder="Username" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Password" autocomplete="current-password">
+    <button onclick="doLogin()">Login</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="app-screen" style="display:none;">
+  <header>
+    <h1>Axonri — Banking Compliance</h1>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <span id="user-label"></span>
+      <button id="logout" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <textarea
+        id="query-input"
+        placeholder="RBI ke baare mein kuch poochein... (Hindi, English, ya Hinglish mein)"
+      ></textarea>
+      <div class="controls">
+        <button id="mic-btn" title="Voice input" disabled>🎤</button>
+        <button id="submit-btn" onclick="submitQuery()">Ask →</button>
+        <span class="stt-status" id="stt-status">Loading voice...</span>
+      </div>
+    </div>
+
+    <div class="card answer-section" id="answer-section">
+      <div id="spinner">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Searching documents...</span>
+      </div>
+      <div id="answer-text"></div>
+      <div class="sources" id="sources"></div>
+    </div>
+
+    <div class="card" id="history-card" style="display:none;">
+      <p style="font-size:12px;color:#6B7280;margin-bottom:8px;">Recent queries</p>
+      <div class="history" id="history"></div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let sessionToken = sessionStorage.getItem('axonri_token') || '';
+let queryHistory = JSON.parse(sessionStorage.getItem('axonri_history') || '[]');
+let currentES = null;   // EventSource
+let isRecording = false;
+let mediaRecorder = null;
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+window.onload = () => {
+  if (sessionToken) showApp();
+  checkSTT();
+};
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  document.getElementById('login-error').textContent = '';
+
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username: user, password: pass})
+    });
+    if (!r.ok) {
+      document.getElementById('login-error').textContent = 'Invalid username or password.';
+      return;
+    }
+    const data = await r.json();
+    sessionToken = data.token;
+    sessionStorage.setItem('axonri_token', sessionToken);
+    document.getElementById('user-label').textContent = data.username;
+    showApp();
+  } catch(e) {
+    document.getElementById('login-error').textContent = 'Connection error. Is the server running?';
+  }
+}
+
+function doLogout() {
+  sessionToken = '';
+  sessionStorage.clear();
+  location.reload();
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  renderHistory();
+}
+
+// ── STT ────────────────────────────────────────────────────────────────────
+async function checkSTT() {
+  // Poll until Whisper model is ready
+  const poll = async () => {
+    try {
+      const r = await fetch('/api/stt/ready');
+      const data = await r.json();
+      if (data.ready) {
+        document.getElementById('mic-btn').disabled = false;
+        document.getElementById('stt-status').textContent = 'Voice ready';
+        setTimeout(() => document.getElementById('stt-status').textContent = '', 2000);
+      } else {
+        setTimeout(poll, 3000);
+      }
+    } catch(e) {
+      setTimeout(poll, 5000);
+    }
+  };
+  poll();
+}
+
+document.getElementById('mic-btn').onclick = async () => {
+  if (isRecording) {
+    stopRecording();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    mediaRecorder = new MediaRecorder(stream);
+    const chunks = [];
+
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(chunks, {type: 'audio/webm'});
+      document.getElementById('stt-status').textContent = 'Transcribing...';
+      try {
+        const fd = new FormData();
+        fd.append('audio', blob, 'query.webm');
+        const r = await fetch('/api/stt', {
+          method: 'POST',
+          headers: {'X-Session-Token': sessionToken},
+          body: fd
+        });
+        const data = await r.json();
+        document.getElementById('query-input').value = data.transcript || '';
+        document.getElementById('stt-status').textContent = '';
+      } catch(e) {
+        document.getElementById('stt-status').textContent = 'Transcription failed';
+      }
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('mic-btn').classList.add('recording');
+    document.getElementById('mic-btn').textContent = '⏹';
+    document.getElementById('stt-status').textContent = 'Recording... click to stop';
+  } catch(e) {
+    document.getElementById('stt-status').textContent = 'Mic access denied';
+  }
+};
+
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+    document.getElementById('mic-btn').textContent = '🎤';
+  }
+}
+
+// ── Query ──────────────────────────────────────────────────────────────────
+document.getElementById('query-input').addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') submitQuery();
+});
+
+function submitQuery() {
+  const q = document.getElementById('query-input').value.trim();
+  if (!q) return;
+
+  // Cancel any in-progress stream
+  if (currentES) { currentES.close(); currentES = null; }
+
+  // Show answer section, reset state
+  const section = document.getElementById('answer-section');
+  section.className = 'card answer-section visible';
+  document.getElementById('spinner').style.display = 'flex';
+  document.getElementById('answer-text').textContent = '';
+  document.getElementById('sources').innerHTML = '';
+  document.getElementById('submit-btn').disabled = true;
+
+  // Save to history
+  addToHistory(q);
+
+  // Stream via SSE
+  const url = `/api/query/stream?q=${encodeURIComponent(q)}&input_method=text`;
+  const es = new EventSource(url);
+  currentES = es;
+
+  // Timeout guard — 90 seconds
+  let timeoutId = setTimeout(() => {
+    es.close();
+    showError('Request timed out. The model may be busy. Please try again.');
+  }, 90000);
+
+  es.addEventListener('token', e => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => { es.close(); showError('Connection lost.'); }, 90000);
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('answer-text').textContent += JSON.parse(e.data).text;
+  });
+
+  es.addEventListener('sources', e => {
+    const sources = JSON.parse(e.data).sources || [];
+    const container = document.getElementById('sources');
+    sources.forEach(s => {
+      const pill = document.createElement('span');
+      pill.className = 'source-pill';
+      pill.textContent = `${s.doc_name} · Page ${s.page}`;
+      container.appendChild(pill);
+    });
+  });
+
+  es.addEventListener('done', () => {
+    clearTimeout(timeoutId);
+    es.close();
+    currentES = null;
+    document.getElementById('submit-btn').disabled = false;
+    document.getElementById('spinner').style.display = 'none';
+  });
+
+  es.addEventListener('error', e => {
+    clearTimeout(timeoutId);
+    let msg = 'An error occurred. Please try again.';
+    try { msg = JSON.parse(e.data).message; } catch(_) {}
+    showError(msg);
+    es.close();
+    currentES = null;
+  });
+
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) return;
+    showError('Connection to server lost. Please refresh and try again.');
+    es.close();
+  };
+}
+
+function showError(msg) {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('submit-btn').disabled = false;
+  const div = document.createElement('div');
+  div.className = 'error-msg';
+  div.textContent = msg;
+  const at = document.getElementById('answer-text');
+  at.innerHTML = '';
+  at.appendChild(div);
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+function addToHistory(query) {
+  queryHistory = [query, ...queryHistory.filter(q => q !== query)].slice(0, 10);
+  sessionStorage.setItem('axonri_history', JSON.stringify(queryHistory));
+  renderHistory();
+}
+
+function renderHistory() {
+  if (!queryHistory.length) return;
+  document.getElementById('history-card').style.display = 'block';
+  const container = document.getElementById('history');
+  container.innerHTML = '';
+  queryHistory.forEach(q => {
+    const chip = document.createElement('button');
+    chip.className = 'history-chip';
+    chip.textContent = q.length > 60 ? q.slice(0, 57) + '...' : q;
+    chip.onclick = () => {
+      document.getElementById('query-input').value = q;
+      document.getElementById('query-input').focus();
+    };
+    container.appendChild(chip);
+  });
+}
+</script>
+</body>
+</html>

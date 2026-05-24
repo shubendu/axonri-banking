@@ -1,0 +1,71 @@
+version: "3.9"
+
+# ── Production compose ───────────────────────────────────────────────────────
+# NO --reload. NO source mount. Pinned image. --workers 1.
+#
+# Start: docker compose -f docker-compose.prod.yml up -d
+# Update: docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d
+
+networks:
+  axonri_net:
+    driver: bridge
+
+volumes:
+  qdrant_data:
+    driver: local
+  axonri_data:
+    driver: local
+
+services:
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: axonri_qdrant
+    restart: always                   # always restart in production
+    networks: [axonri_net]
+    expose:
+      - "6333"                        # internal only — no host port binding in prod
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  app:
+    image: axonri-banking:${VERSION:-latest}  # pinned image tag
+    container_name: axonri_app
+    restart: always
+    networks: [axonri_net]
+    ports:
+      - "8000:8000"
+    volumes:
+      - axonri_data:/data             # no source mount — use built image
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      LLM_HOST_DETECT: "auto"
+      LLM_HOST: "${LLM_HOST:-host.docker.internal}"
+      LLM_PORT: "${LLM_PORT:-11434}"          # Ollama default for branch deployment
+      LLM_MODEL: "${LLM_MODEL:-qwen3:8b}"
+      LLM_BACKEND: "${LLM_BACKEND:-ollama}"
+
+      QDRANT_HOST: "axonri_qdrant"
+      QDRANT_PORT: "6333"
+      DB_PATH: "/data/axonri.db"
+      CORPUS_DIR: "/data/corpus"
+      VECTORS_DIR: "/data/vectors"
+      LOG_DIR: "/data/logs"
+      WHISPER_MODEL: "${WHISPER_MODEL:-small}"
+      AXONRI_ADMIN_PASSWORD: "${AXONRI_ADMIN_PASSWORD:?AXONRI_ADMIN_PASSWORD must be set}"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    command: >
+      uvicorn app.main:app
+        --host 0.0.0.0
+        --port 8000
+        --workers 1
+        --log-level warning

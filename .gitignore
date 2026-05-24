@@ -1,0 +1,40 @@
+# axonri-banking .gitignore
+
+# Runtime data — never commit
+data/
+*.db
+*.pkl
+
+# Models
+*.gguf
+*.bin
+
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Docker
+.dockerenv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs (managed by app)
+*.log
+*.ndjson
